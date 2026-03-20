@@ -74,12 +74,47 @@
           </table>
         </div>
       </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">Submitted Restocking Orders</h3>
+        </div>
+        <div v-if="restockingLoading" class="loading">Loading...</div>
+        <div v-else-if="restockingOrders.length === 0" class="empty-state">
+          No restocking orders submitted yet.
+        </div>
+        <div v-else class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Order #</th>
+                <th>Items</th>
+                <th>Status</th>
+                <th>Order Date</th>
+                <th>Expected Delivery</th>
+                <th>Total Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="order in restockingOrders" :key="order.id">
+                <td><strong>{{ order.order_number }}</strong></td>
+                <td>{{ order.items.length }} item(s)</td>
+                <td><span class="badge warning">Processing</span></td>
+                <td>{{ formatDate(order.order_date) }}</td>
+                <td>{{ formatDate(order.expected_delivery) }}</td>
+                <td><strong>${{ order.total_value.toLocaleString() }}</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script>
 import { ref, onMounted, watch, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { api } from '../api'
 import { useFilters } from '../composables/useFilters'
 import { useI18n } from '../composables/useI18n'
@@ -87,6 +122,7 @@ import { useI18n } from '../composables/useI18n'
 export default {
   name: 'Orders',
   setup() {
+    const route = useRoute()
     const { t, currentCurrency, translateProductName, translateCustomerName } = useI18n()
 
     const currencySymbol = computed(() => {
@@ -95,6 +131,8 @@ export default {
     const loading = ref(true)
     const error = ref(null)
     const orders = ref([])
+    const restockingOrders = ref([])
+    const restockingLoading = ref(false)
 
     // Use shared filters
     const {
@@ -153,7 +191,26 @@ export default {
       })
     }
 
-    onMounted(loadOrders)
+    const loadRestockingOrders = async () => {
+      restockingLoading.value = true
+      try {
+        restockingOrders.value = await api.getRestockingOrders()
+      } catch (err) {
+        console.error('Failed to load restocking orders:', err)
+      } finally {
+        restockingLoading.value = false
+      }
+    }
+
+    // Reload restocking orders when navigating back to this route
+    watch(() => route.path, () => {
+      if (route.path === '/orders') loadRestockingOrders()
+    })
+
+    onMounted(() => {
+      loadOrders()
+      loadRestockingOrders()
+    })
 
     return {
       t,
@@ -165,7 +222,9 @@ export default {
       formatDate,
       currencySymbol,
       translateProductName,
-      translateCustomerName
+      translateCustomerName,
+      restockingOrders,
+      restockingLoading
     }
   }
 }
@@ -274,6 +333,12 @@ export default {
 
 .item-meta {
   font-size: 0.813rem;
+  color: #64748b;
+}
+
+.empty-state {
+  padding: 2rem;
+  text-align: center;
   color: #64748b;
 }
 </style>
